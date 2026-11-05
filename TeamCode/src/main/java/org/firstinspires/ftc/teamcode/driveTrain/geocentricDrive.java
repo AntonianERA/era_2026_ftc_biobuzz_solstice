@@ -15,20 +15,17 @@ public class geocentricDrive {
      * @param rx turn input    (gamepad1.right_stick_x)
      */
     public static void drive(driveTrain dt, double x, double y, double rx) {
-        double heading = dt.getHeading();
-
-        // Rotate the joystick vector by -heading so "forward" stays field-forward
-        double rotX = x * Math.cos(-heading) - y * Math.sin(-heading);
-        double rotY = x * Math.sin(-heading) + y * Math.cos(-heading);
+        x = x * 1.1; // counteract imperfect strafing
 
         // Normalize so no motor power exceeds 1 while keeping ratios
-        double denom = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1.0);
+        double denom = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1.0);
 
         dt.setPowers(
-                (rotY + rotX + rx) / denom, // front left
-                (rotY - rotX + rx) / denom, // back left
-                (rotY - rotX - rx) / denom, // front right
-                (rotY + rotX - rx) / denom  // back right
+                (y + x + rx) / denom, // front left
+                (y - x + rx) / denom, // back left
+                (y - x - rx) / denom, // front right
+                (y + x - rx) / denom  // back right
         );
+
     }
 }

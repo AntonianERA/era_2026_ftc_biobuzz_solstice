@@ -34,7 +34,7 @@ public class driveTrain {
         imu = hardwareMap.get(IMU.class, "imu");
         imu.initialize(new IMU.Parameters(new RevHubOrientationOnRobot(
                 RevHubOrientationOnRobot.LogoFacingDirection.UP,
-                RevHubOrientationOnRobot.UsbFacingDirection.LEFT)));
+                RevHubOrientationOnRobot.UsbFacingDirection.BACKWARD)));
     }
 
     /** Sets all four wheel powers at once. */
