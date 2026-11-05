@@ -77,7 +77,7 @@ public class RobotControl extends LinearOpMode {
             telemetry.update();
 
             if (gamepad2.right_bumper){
-                outake.setVelocity((2500*28)/60);  // what is this value????-mr.tajch
+                outake.setVelocity((2450*28)/60);  // what is this value????-mr.tajch
             }else{
                 outake.setVelocity(0);
             }
@@ -113,7 +113,7 @@ public class RobotControl extends LinearOpMode {
             }
 
             if (gamepad2.left_bumper){
-                kicker.setPosition(.1);
+                kicker.setPosition(.15);
             }else{
                 kicker.setPosition(0);
             }
