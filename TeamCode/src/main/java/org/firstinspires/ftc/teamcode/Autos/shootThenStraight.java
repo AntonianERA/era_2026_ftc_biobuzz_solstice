@@ -15,8 +15,8 @@ public class shootThenStraight extends LinearOpMode {
     // ---- Tuning values ----
     static final double OUTAKE_RPM      = 2450;
     static final double TICKS_PER_REV   = 28;    // bare motor encoder
-    static final double KICKER_REST     = 0.0;   // same as TeleOp
-    static final double KICKER_KICK     = 0.15;   // same as TeleOp
+    static final double KICKER_REST     = 0.15;   // same as TeleOp
+    static final double KICKER_KICK     = 0.0;   // same as TeleOp
     static final double SPIN_UP_TIME    = 1.0;   // seconds
     static final double KICK_HOLD_TIME  = 0.5;   // seconds
 

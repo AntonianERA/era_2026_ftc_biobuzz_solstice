@@ -113,9 +113,9 @@ public class RobotControl extends LinearOpMode {
             }
 
             if (gamepad2.left_bumper){
-                kicker.setPosition(.15);
-            }else{
                 kicker.setPosition(0);
+            }else{
+                kicker.setPosition(.15);
             }
             double max;
 
