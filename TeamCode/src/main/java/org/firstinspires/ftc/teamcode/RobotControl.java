@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 
+import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
 
 // Field-centric drive. Options = reset heading
@@ -80,7 +81,10 @@ public class RobotControl extends LinearOpMode {
             telemetry.update();
 
             if (gamepad2.right_bumper){
-                outake.setVelocity((1900*28)/60);  // first number is rpm then 28 and 60 convert it to ppm
+                outake.setVelocity((2150*28)/60);  // first number is rpm then 28 and 60 convert it to ppm
+            }else if(gamepad2.dpad_left){
+                outake.setVelocity(-(1900*28)/60);
+
             }else{
                 outake.setVelocity(0);
             }
@@ -120,6 +124,8 @@ public class RobotControl extends LinearOpMode {
             }else{
                 kicker.setPosition(.15);
             }
+
+
             double max;
 
             // POV Mode uses left joystick to go forward & strafe, and right joystick to rotate.
@@ -174,6 +180,9 @@ public class RobotControl extends LinearOpMode {
 
             telemetry.addData("Front left/Right", "%4.2f, %4.2f", frontLeftPower, frontRightPower);
             telemetry.addData("Back  left/Right", "%4.2f, %4.2f", backLeftPower, backRightPower);
+            telemetry.addData("Velocity ", outake.getVelocity());
+            telemetry.addData("voltage ", outake.getCurrent(CurrentUnit.MILLIAMPS));
+            telemetry.addData("Power ", outake.getPower());
             telemetry.update();
 
         }
