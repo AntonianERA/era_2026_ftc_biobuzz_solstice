@@ -52,6 +52,7 @@ public class RobotControl extends LinearOpMode {
         backLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         frontRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
         // Wait for the game to start (driver presses START)
         telemetry.addData("Status", "Initialized");
         telemetry.update();
@@ -63,6 +64,7 @@ public class RobotControl extends LinearOpMode {
         outake = hardwareMap.get(DcMotorEx.class, "outake");
         outake.setDirection(DcMotorSimple.Direction.REVERSE);
         kicker = hardwareMap.get(Servo.class, "kicker");
+        outake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         telemetry.update();
 
@@ -71,13 +73,14 @@ public class RobotControl extends LinearOpMode {
 
         // ---- LOOP ----
         while (opModeIsActive()) {
+
            // turn
 
 
             telemetry.update();
 
             if (gamepad2.right_bumper){
-                outake.setVelocity((2450*28)/60);  // what is this value????-mr.tajch
+                outake.setVelocity((1900*28)/60);  // first number is rpm then 28 and 60 convert it to ppm
             }else{
                 outake.setVelocity(0);
             }

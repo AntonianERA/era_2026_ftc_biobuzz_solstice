@@ -13,12 +13,12 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 public class shootThenStraight extends LinearOpMode {
 
     // ---- Tuning values ----
-    static final double OUTAKE_RPM      = 2450;
+    static final double OUTAKE_RPM      = 1900;
     static final double TICKS_PER_REV   = 28;    // bare motor encoder
     static final double KICKER_REST     = 0.15;   // same as TeleOp
     static final double KICKER_KICK     = 0.0;   // same as TeleOp
-    static final double SPIN_UP_TIME    = 1.0;   // seconds
-    static final double KICK_HOLD_TIME  = 0.5;   // seconds
+    static final double SPIN_UP_TIME    = 3.5;   // seconds
+    static final double KICK_HOLD_TIME  = 1.0;   // seconds
 
     private DcMotor frontLeftDrive = null;
     private DcMotor backLeftDrive = null;
@@ -51,7 +51,8 @@ public class shootThenStraight extends LinearOpMode {
 
         outake = hardwareMap.get(DcMotorEx.class, "outake");
         outake.setDirection(DcMotorSimple.Direction.REVERSE);
-        outake.setMode(DcMotor.RunMode.RUN_USING_ENCODER); // needed for setVelocity
+        outake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        outake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);// needed for setVelocity
 
         kicker = hardwareMap.get(Servo.class, "kicker");
         kicker.setPosition(KICKER_REST);
@@ -63,7 +64,9 @@ public class shootThenStraight extends LinearOpMode {
 
         // ---- AUTO STEPS ----
         shoot();
-        drive(0.25, 0, 0, 1.0);   // forward at 0.25 for 1 second
+        drive(-0.25, 0, 0, 1.3);
+        turnRight(.25, 10);
+        drive(-0.25, 0, 0, 1.3);// forward at 0.25 for 1 second
 
         stopDrive();
         telemetry.addData("Status", "Done");
@@ -127,5 +130,9 @@ public class shootThenStraight extends LinearOpMode {
         frontRightDrive.setPower(0);
         backLeftDrive.setPower(0);
         backRightDrive.setPower(0);
+    }
+    // Turns right in place at the given power for a set time, then stops.
+    private void turnRight(double power, double seconds) {
+        drive(0, 0, Math.abs(power), seconds);
     }
 }
