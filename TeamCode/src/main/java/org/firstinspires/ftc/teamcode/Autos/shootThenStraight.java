@@ -65,7 +65,7 @@ public class shootThenStraight extends LinearOpMode {
         // ---- AUTO STEPS ----
         shoot();
         drive(-0.25, 0, 0, 1.3);
-        turnRight(.25, 10);
+        turnRight(.5, 10);
         drive(-0.25, 0, 0, 1.3);// forward at 0.25 for 1 second
 
         stopDrive();
