@@ -1,71 +1,70 @@
-package org.firstinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode.driveTrain;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 /**
- * Field-centric mecanum drive using the goBILDA Pinpoint Odometry Computer.
- * This is NOT an OpMode - create one inside your own OpMode and call it:
+ * Field-centric mecanum drive using the goBILDA Pinpoint, with heading hold and
+ * strafe drift compensation (values tuned with TestOpMode_FieldCentricDriveTest).
  *
- *   FieldCentricDrive drive = new FieldCentricDrive(hardwareMap);   // in init
- *   drive.drive(gamepad1);                                          // every loop
+ * This is NOT an OpMode. Hardware + actions only - the buttons live in RobotControl:
+ *   FieldCentricDrive drive = new FieldCentricDrive(hardwareMap);  // init, robot still
+ *   drive.drive(forward, strafe, turn, scale);                     // once per loop
  *
- * Robot configuration names expected:
- *   Motors:   "frontLeft", "frontRight", "backLeft", "backRight"
- *   I2C:      "pinpoint"  (goBILDA Pinpoint Odometry Computer)
+ * Config names: "frontLeft", "frontRight", "backLeft", "backRight", "pinpoint"
  */
 public class FieldCentricDrive {
 
-    // ---------------- TUNE THESE FOR YOUR ROBOT ----------------
+    // ================= TUNED VALUES =================
+    public static double HEADING_KP       = 3.0;    // heading hold strength
+    public static double RIGHT_DRIFT_COMP = 0.13;   // strafe right: + = was creeping forward
+    public static double LEFT_DRIFT_COMP  = -0.13;  // strafe left:  + = was creeping forward
+    // ================================================
 
-    // Pod positions relative to the robot's center of rotation, in mm.
-    // X_POD_OFFSET: how far LEFT (+) or right (-) the forward-tracking (X) pod is.
-    // Y_POD_OFFSET: how far FORWARD (+) or back (-) the strafe-tracking (Y) pod is.
-    private static final double X_POD_OFFSET_MM = -84.0;
+    // ----- Pinpoint / pods -----
+    private static final double X_POD_OFFSET_MM = -84.0;   // only affects X/Y, not driving
     private static final double Y_POD_OFFSET_MM = -168.0;
-
-    // goBILDA_4_BAR_POD or goBILDA_SWINGARM_POD
     private static final GoBildaPinpointDriver.GoBildaOdometryPods POD_TYPE =
             GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD;
-
-    // X pod should count UP moving forward, Y pod should count UP moving left.
     private static final GoBildaPinpointDriver.EncoderDirection X_POD_DIRECTION =
             GoBildaPinpointDriver.EncoderDirection.FORWARD;
     private static final GoBildaPinpointDriver.EncoderDirection Y_POD_DIRECTION =
-            GoBildaPinpointDriver.EncoderDirection.FORWARD;
+            GoBildaPinpointDriver.EncoderDirection.REVERSED;
 
     private static final double STRAFE_CORRECTION = 1.1;
-    private static final double SLOW_MODE_SCALE   = 0.35;
-
-    // ------------------------------------------------------------
+    private static final double MAX_CORRECTION    = 0.5;
+    private static final double TURN_DEADBAND     = 0.05;
+    private static final double SETTLE_TIME_SEC   = 0.25;
 
     private final DcMotor frontLeft, frontRight, backLeft, backRight;
     private final GoBildaPinpointDriver pinpoint;
 
     private double headingOffsetRad = 0.0;
     private double heading = 0.0;
+    private double targetHeading = 0.0;
+    private boolean holding = false;
+    private boolean headingHoldEnabled = true;
+    private final ElapsedTime sinceTurn = new ElapsedTime();
 
-    /**
-     * Call once during init. THE ROBOT MUST BE STILL - this calibrates the
-     * Pinpoint's IMU (~0.25 s) and zeroes its position.
-     */
+    /** Call once during init. THE ROBOT MUST BE STILL (calibrates the Pinpoint IMU). */
     public FieldCentricDrive(HardwareMap hardwareMap) {
         frontLeft  = hardwareMap.get(DcMotor.class, "frontLeft");
         frontRight = hardwareMap.get(DcMotor.class, "frontRight");
         backLeft   = hardwareMap.get(DcMotor.class, "backLeft");
         backRight  = hardwareMap.get(DcMotor.class, "backRight");
 
-        // Positive power should spin every wheel "forward". Flip any that don't.
-        frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+        // Positive power = every wheel spins forward (verified on the robot).
+        frontLeft.setDirection(DcMotorSimple.Direction.FORWARD);
         backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
-        frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
+        frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
         backRight.setDirection(DcMotorSimple.Direction.FORWARD);
 
         for (DcMotor m : new DcMotor[]{frontLeft, frontRight, backLeft, backRight}) {
@@ -81,47 +80,64 @@ public class FieldCentricDrive {
     }
 
     /**
-     * Easiest way to drive: call once per loop with the driver's gamepad.
-     *   Left stick - drive/strafe (field-relative), Right stick X - rotate,
-     *   Right trigger - slow mode, Options - re-zero heading.
-     */
-    public void drive(Gamepad gamepad) {
-        if (gamepad.options) {
-            pinpoint.update();
-            resetHeading();
-        }
-        double scale = gamepad.right_trigger > 0.5 ? SLOW_MODE_SCALE : 1.0;
-        drive(-gamepad.left_stick_y, gamepad.left_stick_x, gamepad.right_stick_x, scale);
-    }
-
-    /**
-     * Drive with raw values, if you want your own control scheme.
-     * Call once per loop (this is what reads the Pinpoint).
-     *
-     * @param forward  +1 = away from the driver
-     * @param strafe   +1 = to the driver's right
-     * @param turn     +1 = clockwise
-     * @param scale    overall speed multiplier, 0 to 1
+     * Drive with raw values. Call once per loop (this reads the Pinpoint).
+     * @param forward +1 = away from driver   @param strafe +1 = driver's right
+     * @param turn    +1 = clockwise          @param scale  speed multiplier 0..1
      */
     public void drive(double forward, double strafe, double turn, double scale) {
-        pinpoint.update(); // fresh data, once per loop
+        pinpoint.update();
         heading = pinpoint.getHeading(AngleUnit.RADIANS) - headingOffsetRad;
 
-        // Rotate the joystick vector by the opposite of the robot's heading.
+        forward *= scale;
+        strafe  *= scale;
+        turn    *= scale;
+
+        // ----- Heading hold: stops the nose rotating while driving -----
+        boolean driverTurning = Math.abs(turn) > TURN_DEADBAND;
+        boolean translating   = Math.abs(forward) + Math.abs(strafe) > 0.05;
+
+        if (driverTurning || !headingHoldEnabled) {
+            holding = false;
+            sinceTurn.reset();
+        } else if (!holding) {
+            targetHeading = heading;
+            if (sinceTurn.seconds() > SETTLE_TIME_SEC) holding = true;
+        }
+
+        if (holding && translating) {
+            double error = angleWrap(heading - targetHeading);   // CCW drift -> turn CW
+            turn = Range.clip(HEADING_KP * error, -MAX_CORRECTION, MAX_CORRECTION);
+        } else if (holding) {
+            targetHeading = heading;
+        }
+
+        // ----- Field-centric rotation -----
         double rotX = strafe * Math.cos(-heading) - forward * Math.sin(-heading);
         double rotY = strafe * Math.sin(-heading) + forward * Math.cos(-heading);
+
+        // ----- Strafe drift comp (robot-relative, per side) -----
+        double comp = rotX > 0 ? RIGHT_DRIFT_COMP : LEFT_DRIFT_COMP;
+        rotY -= comp * Math.abs(rotX);
         rotX *= STRAFE_CORRECTION;
 
-        double denominator = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(turn), 1.0);
-        frontLeft.setPower((rotY + rotX + turn) / denominator * scale);
-        backLeft.setPower((rotY - rotX + turn) / denominator * scale);
-        frontRight.setPower((rotY - rotX - turn) / denominator * scale);
-        backRight.setPower((rotY + rotX - turn) / denominator * scale);
+        // ----- Mecanum mixing -----
+        double d = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(turn), 1.0);
+        frontLeft.setPower((rotY + rotX + turn) / d);
+        backLeft.setPower((rotY - rotX + turn) / d);
+        frontRight.setPower((rotY - rotX - turn) / d);
+        backRight.setPower((rotY + rotX - turn) / d);
     }
 
-    /** Makes the direction the robot is facing right now the new "forward". */
+    /** Makes the direction the robot faces right now the new "forward". */
     public void resetHeading() {
         headingOffsetRad = pinpoint.getHeading(AngleUnit.RADIANS);
+        heading = 0.0;
+        targetHeading = 0.0;
+    }
+
+    public void setHeadingHoldEnabled(boolean enabled) {
+        headingHoldEnabled = enabled;
+        holding = false;
     }
 
     public void stop() {
@@ -136,11 +152,14 @@ public class FieldCentricDrive {
     public double getX(DistanceUnit unit) { return pinpoint.getPosX(unit); }
     public double getY(DistanceUnit unit) { return pinpoint.getPosY(unit); }
 
-    /** Optional: adds pose info to telemetry (you still call telemetry.update()). */
+    /** Adds pose info to telemetry (you still call telemetry.update()). */
     public void addTelemetry(Telemetry telemetry) {
-        telemetry.addData("Pinpoint status", pinpoint.getDeviceStatus());
-        telemetry.addData("X (in)", "%.1f", getX(DistanceUnit.INCH));
-        telemetry.addData("Y (in)", "%.1f", getY(DistanceUnit.INCH));
+        telemetry.addData("Pinpoint", pinpoint.getDeviceStatus());
         telemetry.addData("Heading (deg)", "%.1f", getHeadingDegrees());
+        telemetry.addData("X / Y (in)", "%.1f / %.1f", getX(DistanceUnit.INCH), getY(DistanceUnit.INCH));
+    }
+
+    private static double angleWrap(double rad) {
+        return Math.atan2(Math.sin(rad), Math.cos(rad));
     }
 }

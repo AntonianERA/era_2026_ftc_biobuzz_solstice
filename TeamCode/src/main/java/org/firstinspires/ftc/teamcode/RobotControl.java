@@ -2,136 +2,114 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.Servo;
 
-import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
+import org.firstinspires.ftc.teamcode.driveTrain.FieldCentricDrive;
+import org.firstinspires.ftc.teamcode.mechanisms.Intake;
+import org.firstinspires.ftc.teamcode.mechanisms.Outtake;
 
-
-// Field-centric drive. Options = reset heading
+/*
+ * ROBOT CONTROL
+ *
+ * GAMEPAD 1 - DRIVE (field-centric)
+ *   Left stick      drive / strafe
+ *   Right stick X   turn
+ *   Right trigger   slow mode (hold)
+ *   Options         re-zero heading (robot facing away from you)
+ *
+ * GAMEPAD 2 - MECHANISMS
+ *   X / Y           both intakes in / out
+ *   A / B           intake2 only in / out
+ *   DPAD UP / DOWN  intake only in / out
+ *   Right bumper    shooter forward
+ *   DPAD LEFT       shooter backward
+ *   Left bumper     kicker
+ */
 @TeleOp(name = "Robot Control")
 public class RobotControl extends LinearOpMode {
 
+    private FieldCentricDrive drive;   // driveTrain/FieldCentricDrive
+    private Intake intake;             // mechanisms/Intake
+    private Outtake outtake;           // mechanisms/Outtake
 
-    private DcMotor intake;
-    private DcMotorEx outake;
-    private DcMotor intake2;
-
-    private DcMotor frontLeftDrive = null;
-    private DcMotor backLeftDrive = null;
-    private DcMotor frontRightDrive = null;
-    private DcMotor backRightDrive = null;
-
-    private Servo kicker;
+    private static final double SLOW_MODE_SPEED = 0.35;   // right trigger slow mode
 
     @Override
     public void runOpMode() {
 
-        frontLeftDrive = hardwareMap.get(DcMotor.class, "frontLeft");
-        backLeftDrive = hardwareMap.get(DcMotor.class, "backLeft");
-        frontRightDrive = hardwareMap.get(DcMotor.class, "frontRight");
-        backRightDrive = hardwareMap.get(DcMotor.class, "backRight");
-
-        // ########################################################################################
-        // !!!            IMPORTANT Drive Information. Test your motor directions.            !!!!!
-        // ########################################################################################
-        // Most robots need the motors on one side to be reversed to drive forward.
-        // The motor reversals shown here are for a "direct drive" robot (the wheels turn the same direction as the motor shaft)
-        // If your robot has additional gear reductions or uses a right-angled drive, it's important to ensure
-        // that your motors are turning in the correct direction.  So, start out with the reversals here, BUT
-        // when you first test your robot, push the left joystick forward and observe the direction the wheels turn.
-        // Reverse the direction (flip FORWARD <-> REVERSE ) of any wheel that runs backward
-        // Keep testing until ALL the wheels move the robot forward when you push the left joystick forward.
-        frontLeftDrive.setDirection(DcMotor.Direction.FORWARD);
-        backLeftDrive.setDirection(DcMotor.Direction.REVERSE);
-        frontRightDrive.setDirection(DcMotor.Direction.REVERSE);
-        backRightDrive.setDirection(DcMotor.Direction.FORWARD);
-
-        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        backLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        frontRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        org.firstinspires.ftc.teamcode.FieldCentricDrive drive = new org.firstinspires.ftc.teamcode.FieldCentricDrive(hardwareMap);
-
-        // Wait for the game to start (driver presses START)
-        telemetry.addData("Status", "Initialized");
-        telemetry.update();
         // ---- INIT ----
+        // ROBOT MUST BE STILL here (Pinpoint IMU calibrates).
+        drive   = new FieldCentricDrive(hardwareMap);
+        intake  = new Intake(hardwareMap);
+        outtake = new Outtake(hardwareMap);
 
-
-        intake = hardwareMap.get(DcMotor.class, "intake");
-        intake2 = hardwareMap.get(DcMotor.class, "intake2");
-        outake = hardwareMap.get(DcMotorEx.class, "outake");
-        outake.setDirection(DcMotorSimple.Direction.REVERSE);
-        kicker = hardwareMap.get(Servo.class, "kicker");
-        outake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-
+        telemetry.addData("Status", "Initialized");
         telemetry.update();
 
         waitForStart();
 
-
         // ---- LOOP ----
         while (opModeIsActive()) {
 
-           // turn
+            // ================= GAMEPAD 1: DRIVE =================
+            double forward = -gamepad1.left_stick_y;   // stick forward is negative
+            double strafe  =  gamepad1.left_stick_x;
+            double turn    =  gamepad1.right_stick_x;
+            double speed   = gamepad1.right_trigger > 0.5 ? SLOW_MODE_SPEED : 1.0;
 
+            drive.drive(forward, strafe, turn, speed);
 
+            if (gamepad1.options) {
+                drive.resetHeading();
+            }
+
+            // ================= GAMEPAD 2: INTAKE =================
+            double intakePower  = 0.0;
+            double intake2Power = 0.0;
+
+            if (gamepad2.x) {                 // both in
+                intakePower  = Intake.IN_POWER;
+                intake2Power = Intake.IN_POWER;
+            } else if (gamepad2.y) {          // both out
+                intakePower  = Intake.OUT_POWER;
+                intake2Power = Intake.OUT_POWER;
+            }
+
+            if (gamepad2.a) {                 // intake2 only in
+                intake2Power = Intake.IN_POWER;
+            } else if (gamepad2.b) {          // intake2 only out
+                intake2Power = Intake.OUT_POWER;
+            }
+
+            if (gamepad2.dpad_up) {           // intake only in
+                intakePower = Intake.IN_POWER;
+            } else if (gamepad2.dpad_down) {  // intake only out
+                intakePower = Intake.OUT_POWER;
+            }
+
+            intake.setPower(intakePower, intake2Power);
+
+            // ================= GAMEPAD 2: OUTTAKE =================
+            if (gamepad2.right_bumper) {
+                outtake.shoot();
+            } else if (gamepad2.dpad_left) {
+                outtake.reverse();
+            } else {
+                outtake.stopShooter();
+            }
+
+            if (gamepad2.left_bumper) {
+                outtake.kick();
+            } else {
+                outtake.resetKicker();
+            }
+
+            // ================= TELEMETRY =================
+
+            drive.addTelemetry(telemetry);
+            intake.addTelemetry(telemetry);
+            outtake.addTelemetry(telemetry);
             telemetry.update();
 
-            if (gamepad2.right_bumper){
-                outake.setVelocity((2150*28)/60);  // first number is rpm then 28 and 60 convert it to ppm
-            }else if(gamepad2.dpad_left){
-                outake.setVelocity(-(1900*28)/60);
-
-            }else{
-                outake.setVelocity(0);
-            }
-            int position = 0;
-
-
-            if(gamepad2.x){
-                intake.setPower(1);
-                intake2.setPower(1);
-
-            }else if (gamepad2.y){
-                intake.setPower(-1);
-                intake2.setPower(-1);
-            }else{
-                intake.setPower(0);
-                intake2.setPower(0);
-            }
-
-            if (gamepad2.a){
-                intake2.setPower(1);
-            }else if (gamepad2.b){
-                intake2.setPower(-1);
-            }else{
-                intake2.setPower(0);
-            }
-
-            if (gamepad2.dpad_up){
-                intake.setPower(1);
-            }else if (gamepad2.dpad_down){
-                intake.setPower(-1);
-            }else{
-                intake2.setPower(0);
-            }
-
-            if (gamepad2.left_bumper){
-                kicker.setPosition(0);
-            }else{
-                kicker.setPosition(.15);
-            }
-
-            drive.drive(gamepad1);          // one line handles all driving
-
-            // ... your arm / intake / shooter code ...
-
-            drive.addTelemetry(telemetry);  // optional
-            telemetry.update();
 
 
 //            double max;
