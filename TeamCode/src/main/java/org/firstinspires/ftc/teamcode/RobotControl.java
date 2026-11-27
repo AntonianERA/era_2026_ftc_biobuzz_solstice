@@ -4,8 +4,10 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.driveTrain.FieldCentricDrive;
+import org.firstinspires.ftc.teamcode.mechanisms.Flower;
 import org.firstinspires.ftc.teamcode.mechanisms.Intake;
 import org.firstinspires.ftc.teamcode.mechanisms.Outtake;
+import org.firstinspires.ftc.teamcode.mechanisms.ShootSequence;
 
 /*
  * ROBOT CONTROL
@@ -23,6 +25,11 @@ import org.firstinspires.ftc.teamcode.mechanisms.Outtake;
  *   Right bumper    shooter forward
  *   DPAD LEFT       shooter backward
  *   Left bumper     kicker
+ *   Right trigger   SHOOT 2 (spin up, kick, feed, kick, stop)
+ *   Left trigger    SHOOT 1 (spin up, kick, stop)
+ *                   (any intake/outtake button above cancels a shot)
+ *   DPAD RIGHT      flower up    (placeholder)
+ *   Right stick btn flower down  (placeholder)
  */
 @TeleOp(name = "Robot Control")
 public class RobotControl extends LinearOpMode {
@@ -30,6 +37,8 @@ public class RobotControl extends LinearOpMode {
     private FieldCentricDrive drive;   // driveTrain/FieldCentricDrive
     private Intake intake;             // mechanisms/Intake
     private Outtake outtake;           // mechanisms/Outtake
+    private Flower flower;             // mechanisms/Flower
+    private ShootSequence shooter;     // mechanisms/ShootSequence
 
     private static final double SLOW_MODE_SPEED = 0.35;   // right trigger slow mode
 
@@ -41,11 +50,18 @@ public class RobotControl extends LinearOpMode {
         drive   = new FieldCentricDrive(hardwareMap);
         intake  = new Intake(hardwareMap);
         outtake = new Outtake(hardwareMap);
+        flower  = new Flower(hardwareMap);
+        shooter = new ShootSequence(outtake, intake);
+
+        boolean lastRightTrigger = false;
+        boolean lastLeftTrigger  = false;
 
         telemetry.addData("Status", "Initialized");
         telemetry.update();
 
         waitForStart();
+
+        flower.down();   // start in the down position
 
         // ---- LOOP ----
         while (opModeIsActive()) {
@@ -62,45 +78,79 @@ public class RobotControl extends LinearOpMode {
                 drive.resetHeading();
             }
 
-            // ================= GAMEPAD 2: INTAKE =================
-            double intakePower  = 0.0;
-            double intake2Power = 0.0;
+            // ================= GAMEPAD 2: SHOOT SEQUENCES =================
+            boolean rightTrigger = gamepad2.right_trigger > 0.5;
+            boolean leftTrigger  = gamepad2.left_trigger > 0.5;
 
-            if (gamepad2.x) {                 // both in
-                intakePower  = Intake.IN_POWER;
-                intake2Power = Intake.IN_POWER;
-            } else if (gamepad2.y) {          // both out
-                intakePower  = Intake.OUT_POWER;
-                intake2Power = Intake.OUT_POWER;
+            if (rightTrigger && !lastRightTrigger && !shooter.isRunning()) {
+                shooter.shootDouble();          // spin up, kick, feed, kick, stop
+            }
+            if (leftTrigger && !lastLeftTrigger && !shooter.isRunning()) {
+                shooter.shootOnce();            // spin up, kick, stop
+            }
+            lastRightTrigger = rightTrigger;
+            lastLeftTrigger  = leftTrigger;
+
+            // Any manual intake/outtake button cancels a running sequence
+            boolean manualMechanism = gamepad2.x || gamepad2.y || gamepad2.a || gamepad2.b
+                    || gamepad2.dpad_up || gamepad2.dpad_down || gamepad2.dpad_left
+                    || gamepad2.right_bumper || gamepad2.left_bumper;
+            if (manualMechanism && shooter.isRunning()) {
+                shooter.cancel();
             }
 
-            if (gamepad2.a) {                 // intake2 only in
-                intake2Power = Intake.IN_POWER;
-            } else if (gamepad2.b) {          // intake2 only out
-                intake2Power = Intake.OUT_POWER;
-            }
-
-            if (gamepad2.dpad_up) {           // intake only in
-                intakePower = Intake.IN_POWER;
-            } else if (gamepad2.dpad_down) {  // intake only out
-                intakePower = Intake.OUT_POWER;
-            }
-
-            intake.setPower(intakePower, intake2Power);
-
-            // ================= GAMEPAD 2: OUTTAKE =================
-            if (gamepad2.right_bumper) {
-                outtake.shoot();
-            } else if (gamepad2.dpad_left) {
-                outtake.reverse();
+            if (shooter.isRunning()) {
+                shooter.update();               // sequence controls intake + outtake
             } else {
-                outtake.stopShooter();
+                // ================= GAMEPAD 2: INTAKE =================
+                double intakePower  = 0.0;
+                double intake2Power = 0.0;
+
+                if (gamepad2.x) {                 // both in
+                    intakePower  = Intake.IN_POWER;
+                    intake2Power = Intake.IN_POWER;
+                } else if (gamepad2.y) {          // both out
+                    intakePower  = Intake.OUT_POWER;
+                    intake2Power = Intake.OUT_POWER;
+                }
+
+                if (gamepad2.a) {                 // intake2 only in
+                    intake2Power = Intake.IN_POWER;
+                } else if (gamepad2.b) {          // intake2 only out
+                    intake2Power = Intake.OUT_POWER;
+                }
+
+                if (gamepad2.dpad_up) {           // intake only in
+                    intakePower = Intake.IN_POWER;
+                } else if (gamepad2.dpad_down) {  // intake only out
+                    intakePower = Intake.OUT_POWER;
+                }
+
+                intake.setPower(intakePower, intake2Power);
+
+                // ================= GAMEPAD 2: OUTTAKE =================
+                if (gamepad2.right_bumper) {
+                    outtake.shoot();
+                } else if (gamepad2.dpad_left) {
+                    outtake.reverse();
+                } else {
+                    outtake.stopShooter();
+                }
+
+                if (gamepad2.left_bumper) {
+                    outtake.kick();
+                } else {
+                    outtake.resetKicker();
+                }
+
             }
 
-            if (gamepad2.left_bumper) {
-                outtake.kick();
-            } else {
-                outtake.resetKicker();
+            // ================= GAMEPAD 2: FLOWER =================
+            // TODO: placeholder buttons - change once controls are decided
+            if (gamepad2.dpad_right) {
+                flower.up();
+            } else if (gamepad2.right_stick_button) {
+                flower.down();
             }
 
             // ================= TELEMETRY =================
@@ -108,6 +158,11 @@ public class RobotControl extends LinearOpMode {
             drive.addTelemetry(telemetry);
             intake.addTelemetry(telemetry);
             outtake.addTelemetry(telemetry);
+            flower.addTelemetry(telemetry);
+            shooter.addTelemetry(telemetry);
+            // DEBUG: raw gamepad2 inputs (remove once the shooter works)
+            telemetry.addData("GP2 RT / LT", "%.2f / %.2f", gamepad2.right_trigger, gamepad2.left_trigger);
+            telemetry.addData("GP2 RB / LB", "%b / %b", gamepad2.right_bumper, gamepad2.left_bumper);
             telemetry.update();
 
 
